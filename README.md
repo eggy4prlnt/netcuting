@@ -1,8 +1,12 @@
-# NetCut CLI
+# netcuting
 
 Tool CLI untuk scan perangkat di jaringan LAN, memutus koneksi internet target, dan memonitor traffic DNS/HTTP/HTTPS (TLS SNI).
 
 > **Peringatan legal:** Hanya gunakan di jaringan milik sendiri atau dengan izin tertulis. ARP/NDP spoofing dan MITM tanpa otorisasi ilegal di banyak yurisdiksi.
+
+## Preview
+
+![netcuting — Windows 11](docs/screenshot.png)
 
 ## Fitur
 
@@ -21,7 +25,7 @@ Fitur tambahan:
 
 ## Persyaratan
 
-- **macOS, Linux, atau Windows**
+  - **macOS, Linux, atau Windows**
 - **Python 3.10+**
 - Koneksi ke jaringan LAN/WiFi yang sama dengan target
 - **Hak privileged** — wajib untuk ARP poison, sniff, dan scan:
