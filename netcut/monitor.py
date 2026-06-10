@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import ipaddress
-import subprocess
 from dataclasses import dataclass, field
 
 from scapy.all import ICMP, IP, TCP, sniff
 from scapy.layers.inet6 import ICMPv6EchoReply, ICMPv6EchoRequest, IPv6
 
 from netcut.cutter import BLACKHOLE_MAC
+from netcut.platform_ops import ping_once
 
 
 @dataclass
@@ -33,15 +33,7 @@ def _subnet_network(subnet: str) -> ipaddress.IPv4Network:
 
 
 def ping_target(ip: str, timeout: float = 1.0) -> bool | None:
-    try:
-        result = subprocess.run(
-            ["ping", "-c", "1", "-W", str(int(max(timeout, 1))), ip],
-            capture_output=True,
-            text=True,
-        )
-        return result.returncode == 0
-    except Exception:
-        return None
+    return ping_once(ip, timeout)
 
 
 def _is_external_v4(ip: str, local_net: ipaddress.IPv4Network) -> bool:

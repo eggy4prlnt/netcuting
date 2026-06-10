@@ -109,7 +109,11 @@ def kind_label(kind: DeviceKind) -> str:
 
 def _match_vendor(vendor: str, needles: tuple[str, ...]) -> bool:
     vendor_l = vendor.lower()
-    return any(needle in vendor_l for needle in needles)
+    vendor_compact = re.sub(r"[^a-z0-9]", "", vendor_l)
+    return any(
+        needle in vendor_l or needle.replace(" ", "") in vendor_compact
+        for needle in needles
+    )
 
 
 def _classify_apple(hostname: str) -> DeviceKind:

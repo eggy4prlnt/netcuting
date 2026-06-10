@@ -4,8 +4,10 @@
 from __future__ import annotations
 
 import argparse
+import sys
 
 from netcut.cli import run_dashboard
+from netcut.npcap_setup import ensure_npcap
 from netcut.verbose import set_verbose
 
 
@@ -30,6 +32,11 @@ def main() -> None:
         action="store_true",
         help="Langsung ke mode Sniff setelah scan",
     )
+    parser.add_argument(
+        "--skip-npcap-check",
+        action="store_true",
+        help="Lewati cek/install Npcap (Windows saja)",
+    )
     args = parser.parse_args()
     default_mode = None
     if args.cut and args.sniff:
@@ -39,6 +46,11 @@ def main() -> None:
     elif args.sniff:
         default_mode = "sniff"
     set_verbose(args.verbose)
+    if sys.platform == "win32" and not args.skip_npcap_check:
+        from rich.console import Console
+
+        if not ensure_npcap(Console()):
+            sys.exit(1)
     run_dashboard(verbose=args.verbose, default_mode=default_mode)
 
 

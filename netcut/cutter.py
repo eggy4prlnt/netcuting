@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import signal
-import subprocess
 import sys
 import time
 from dataclasses import dataclass, field
@@ -12,6 +11,7 @@ from typing import Literal
 from scapy.all import ARP, Ether, sendp
 from scapy.layers.inet6 import ICMPv6NDOptDstLLAddr, ICMPv6ND_NA, IPv6
 
+from netcut.platform_ops import set_ip_forwarding
 from netcut.verbose import vlog
 
 # MAC kosong = traffic tidak bisa dikirim kemana-mana (true cut, bukan MITM)
@@ -57,29 +57,14 @@ class ConnectionCutter:
         return BLACKHOLE_MAC
 
     def _configure_ip_stack(self) -> None:
-        value = "1" if self.forward else "0"
-        subprocess.run(
-            ["sysctl", "-w", f"net.inet.ip.forwarding={value}"],
-            capture_output=True,
-        )
-        subprocess.run(
-            ["sysctl", "-w", f"net.inet6.ip6.forwarding={value}"],
-            capture_output=True,
-        )
+        set_ip_forwarding(self.forward)
         if self.forward:
             vlog(2, "IP forwarding IPv4/IPv6 diaktifkan (MITM tap)")
         else:
             vlog(2, "IP forwarding IPv4/IPv6 dimatikan")
 
     def _ensure_no_forwarding(self) -> None:
-        subprocess.run(
-            ["sysctl", "-w", "net.inet.ip.forwarding=0"],
-            capture_output=True,
-        )
-        subprocess.run(
-            ["sysctl", "-w", "net.inet6.ip6.forwarding=0"],
-            capture_output=True,
-        )
+        set_ip_forwarding(False)
         vlog(2, "IP forwarding IPv4/IPv6 dimatikan")
 
     def _arp_poison_once(self) -> None:

@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 import ipaddress
-import re
-import subprocess
 from typing import Iterable
 
 from scapy.all import sniff
 from scapy.layers.inet6 import IPv6
 
+from netcut.platform_ops import get_link_local_addresses, parse_neighbor_table
 from netcut.verbose import vlog
 
 
@@ -41,69 +40,11 @@ def mac_to_link_local(mac: str) -> str:
 
 def parse_ndp_table(interface: str) -> dict[str, list[str]]:
     """Map MAC address -> IPv6 addresses seen on an interface."""
-    try:
-        result = subprocess.run(
-            ["ndp", "-an"],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-    except Exception:
-        return {}
-
-    mac_to_ipv6: dict[str, list[str]] = {}
-
-    for line in result.stdout.splitlines():
-        if interface not in line:
-            continue
-
-        parts = line.split()
-        if len(parts) < 3:
-            continue
-
-        ipv6_raw = parts[0]
-        mac = parts[1].lower()
-        if mac == "(incomplete)" or ":" not in mac:
-            continue
-
-        try:
-            ipv6 = normalize_ipv6(ipv6_raw)
-        except ValueError:
-            continue
-
-        mac_to_ipv6.setdefault(mac, [])
-        if ipv6 not in mac_to_ipv6[mac]:
-            mac_to_ipv6[mac].append(ipv6)
-
-    return mac_to_ipv6
+    return parse_neighbor_table(interface)
 
 
 def get_local_link_locals(interface: str, local_mac: str) -> list[str]:
-    addrs = parse_ndp_table(interface).get(local_mac.lower(), [])
-    link_locals = [addr for addr in addrs if addr.startswith("fe80:")]
-    if link_locals:
-        return link_locals
-
-    try:
-        output = subprocess.run(
-            ["ifconfig", interface],
-            capture_output=True,
-            text=True,
-            check=True,
-        ).stdout
-    except Exception:
-        return []
-
-    found: list[str] = []
-    for line in output.splitlines():
-        match = re.search(r"inet6\s+(fe80:[0-9a-f:]+)", line, re.IGNORECASE)
-        if not match:
-            continue
-        try:
-            found.append(normalize_ipv6(match.group(1)))
-        except ValueError:
-            continue
-    return found
+    return get_link_local_addresses(interface, local_mac)
 
 
 def sniff_ipv6_from_mac(mac: str, interface: str, timeout: float = 1.5) -> list[str]:

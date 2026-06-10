@@ -21,10 +21,26 @@ Fitur tambahan:
 
 ## Persyaratan
 
-- **macOS** (tool ini memakai `route`, `ifconfig`, `ipconfig`, `ndp`, `sysctl`)
+- **macOS, Linux, atau Windows**
 - **Python 3.10+**
 - Koneksi ke jaringan LAN/WiFi yang sama dengan target
-- **Hak root (sudo)** — wajib untuk ARP poison, sniff, dan scan
+- **Hak privileged** — wajib untuk ARP poison, sniff, dan scan:
+  - macOS / Linux: `sudo` (tool otomatis minta password)
+  - Windows: Administrator + [Npcap](https://npcap.com/) (Scapy butuh Npcap untuk raw packet)
+
+### Persyaratan per platform
+
+| Platform | Paket / tool tambahan |
+|----------|------------------------|
+| **macOS** | Sudah built-in (`route`, `ifconfig`, `ndp`, `sysctl`) |
+| **Linux** | `ip` (iproute2), `ping` — umumnya sudah terpasang |
+| **Windows** | [Npcap](https://npcap.com/) — **auto-detect & guided install** saat pertama jalan; terminal **as Administrator** |
+
+NetCut di Windows otomatis mengecek Npcap saat startup. Jika belum terpasang, installer resmi diunduh dari npcap.com dan wizard install dibuka (butuh klik **I Agree → Install** — Npcap gratis tidak mendukung silent install).
+
+Lewati cek: `.\run.ps1 --skip-npcap-check`
+
+Hostname resolution (opsional): `dig` (BIND tools) — jika tidak ada, kolom Name tetap kosong.
 
 ## Setup
 
@@ -36,11 +52,23 @@ cd /path/to/netcuting
 
 ### 2. Jalankan via script (disarankan)
 
-Script `run.sh` otomatis membuat virtualenv dan install dependency:
+**macOS / Linux:**
 
 ```bash
 chmod +x run.sh
 ./run.sh
+```
+
+**Windows (PowerShell):**
+
+```powershell
+.\run.ps1
+```
+
+**Windows (CMD):**
+
+```cmd
+run.bat
 ```
 
 ### 3. Setup manual (opsional)
@@ -114,35 +142,42 @@ Scan ulang dari dashboard. Gateway harus muncul di hasil ARP scan sebelum cut/sn
 3. Cek counter **Poison** di panel — harus naik (bukti MITM aktif)
 4. Pastikan kamu dan target di **jaringan yang sama**
 
-### Permission denied / butuh root
+### Permission denied / butuh root / admin
 
-Tool otomatis delegasi ke `sudo` worker. Masukkan password saat diminta:
+- **macOS / Linux:** tool otomatis delegasi ke `sudo` worker. Masukkan password saat diminta.
+- **Windows:** setujui prompt UAC saat diminta, atau buka terminal **Run as Administrator** sejak awal.
 
 ```
-Delegasi [sniff] ke sudo worker (netcut.sniff_worker)
+Delegasi [sniff] ke privileged worker (netcut.sniff_worker)
 ```
 
 ### Scan gagal
 
 - Pastikan WiFi/LAN aktif dan punya IP
-- Coba jalankan manual: `sudo .venv/bin/python netcut.py`
+- **macOS / Linux:** `sudo .venv/bin/python netcut.py`
+- **Windows:** buka PowerShell as Administrator, lalu `.\run.ps1`
 
 ## Struktur project
 
 ```
 netcuting/
 ├── netcut.py           # Entry point CLI
-├── run.sh              # Setup + run helper
+├── run.sh              # Launcher macOS/Linux
+├── run.ps1             # Launcher Windows (PowerShell)
+├── run.bat             # Launcher Windows (CMD)
 ├── requirements.txt
 └── netcut/
     ├── cli.py          # Dashboard interaktif
+    ├── platform_ops.py # Abstraksi OS (network, privilege, forwarding)
+    ├── network.py      # Deteksi interface/gateway/subnet
     ├── scanner.py      # ARP scan
     ├── cutter.py       # ARP/NDP poison
     ├── sniffer.py      # DNS/HTTP/TLS-SNI sniff
     ├── monitor.py      # Verifikasi cut
     ├── ipv6.py         # IPv6 discovery & NDP
-    ├── cut_worker.py   # Root worker (cut)
-    └── sniff_worker.py # Root worker (sniff/both)
+    ├── cut_worker.py   # Privileged worker (cut)
+    ├── sniff_worker.py # Privileged worker (sniff/both)
+    └── scan_worker.py  # Privileged worker (ARP scan)
 ```
 
 ## Dependencies

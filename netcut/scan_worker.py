@@ -1,20 +1,19 @@
-"""Privileged ARP scan worker — must run as root."""
+"""Privileged ARP scan worker — must run as root/administrator."""
 
 from __future__ import annotations
 
 import json
-import os
 import sys
 
+from netcut.platform_ops import load_worker_request, require_privileged_worker
 from netcut.scanner import arp_scan_raw
 
 
 def main() -> None:
-    if os.geteuid() != 0:
-        print("ERROR: scan worker butuh root", file=sys.stderr)
-        sys.exit(1)
+    require_privileged_worker("scan worker")
+    req = load_worker_request()
+    output_path = req.pop("output", None)
 
-    req = json.load(sys.stdin)
     devices, gateway_mac = arp_scan_raw(
         subnet=req["subnet"],
         interface=req["interface"],
@@ -23,23 +22,27 @@ def main() -> None:
         timeout=req.get("timeout", 3),
     )
 
-    print(
-        json.dumps(
-            {
-                "devices": [
-                    {
-                        "ip": d.ip,
-                        "mac": d.mac,
-                        "vendor": d.vendor,
-                        "is_gateway": d.is_gateway,
-                        "is_self": d.is_self,
-                    }
-                    for d in devices
-                ],
-                "gateway_mac": gateway_mac,
-            }
-        )
+    payload = json.dumps(
+        {
+            "devices": [
+                {
+                    "ip": d.ip,
+                    "mac": d.mac,
+                    "vendor": d.vendor,
+                    "is_gateway": d.is_gateway,
+                    "is_self": d.is_self,
+                }
+                for d in devices
+            ],
+            "gateway_mac": gateway_mac,
+        }
     )
+
+    if output_path:
+        with open(output_path, "w", encoding="utf-8") as handle:
+            handle.write(payload)
+    else:
+        print(payload)
 
 
 if __name__ == "__main__":

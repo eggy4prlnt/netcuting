@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import json
-import os
-import subprocess
+import platform
 import sys
 import threading
 import time
+
+from netcut.platform_ops import get_interface_label, is_privileged, run_privileged_worker
 
 from rich.align import Align
 from rich.console import Console
@@ -27,12 +27,47 @@ from netcut.verbose import set_verbose, vlog
 
 console = Console()
 
+_BANNER = r"""
+         _           _   _
+ ___ ___| |_ ___ _ _| |_|_|___ ___
+|   | -_|  _|  _| | |  _| |   | . |
+|_|_|___|_| |___|___|_| |_|_|_|_  |
+                              |___|
+""".strip("\n")
+
+_REPO = "https://github.com/eggy4prlnt/netcuting"
+
+
+def _os_label() -> str:
+    system = platform.system()
+    if system == "Windows":
+        release = platform.release()
+        build = platform.version().split(".", 2)
+        if release == "10" and len(build) >= 3 and int(build[2]) >= 22000:
+            return "Windows 11"
+        return f"Windows {release}"
+    if system == "Darwin":
+        ver, _, _ = platform.mac_ver()
+        return f"macOS {ver}" if ver else "macOS"
+    if system == "Linux":
+        return platform.platform(terse=True) or "Linux"
+    return system or sys.platform
+
+
+def _banner_text() -> Text:
+    text = Text()
+    for line in _BANNER.splitlines():
+        text.append(line + "\n", style="bold red")
+    text.append("\n", style="")
+    text.append(f"Repo : {_REPO}\n", style="dim cyan")
+    text.append(f"OS   : {_os_label()}", style="dim white")
+    return text
+
 
 def _header(net: NetworkInfo) -> Panel:
-    text = Text()
-    text.append("NETCUT ", style="bold red")
-    text.append("CLI Dashboard\n", style="bold white")
-    text.append(f"Interface : {net.interface}\n", style="cyan")
+    text = _banner_text()
+    text.append("\n\n", style="")
+    text.append(f"Interface : {get_interface_label(net.interface, net.local_ip)}\n", style="cyan")
     text.append(f"Local IP  : {net.local_ip} ({net.local_mac})\n", style="green")
     text.append(f"Gateway   : {net.gateway_ip}\n", style="yellow")
     text.append(f"Subnet    : {net.subnet}", style="dim")
@@ -632,44 +667,41 @@ def _dispatch_action(
         console.print(f"[red]Mode tidak dikenal: {action}[/red]")
         return
 
-    if os.geteuid() != 0:
+    if not is_privileged():
         with_cut = action in {"cut", "both"}
         with_sniff = action in {"sniff", "both"}
         worker = "netcut.cut_worker" if action == "cut" else "netcut.sniff_worker"
-        payload = json.dumps(
-            {
-                "target": {
-                    "ip": target.ip,
-                    "mac": target.mac,
-                    "vendor": target.vendor,
-                    "hostname": target.hostname,
-                    "ipv6_addresses": target.ipv6_addresses,
-                    "device_kind": target.device_kind,
-                    "device_type": target.device_type,
-                    "is_gateway": target.is_gateway,
-                    "is_self": target.is_self,
-                },
-                "net": {
-                    "interface": net.interface,
-                    "local_ip": net.local_ip,
-                    "local_mac": net.local_mac,
-                    "gateway_ip": net.gateway_ip,
-                    "gateway_mac": net.gateway_mac,
-                    "subnet": net.subnet,
-                },
-                "gateway_mac": gateway_mac,
-                "verbose": verbose,
-                "action": action,
-                "with_cut": with_cut,
-                "enable_sniff": with_sniff,
-            }
-        )
-        vlog(1, f"Delegasi [{action}] ke sudo worker ({worker})")
-        subprocess.run(
-            ["sudo", "-E", sys.executable, "-m", worker],
-            input=payload,
-            text=True,
-        )
+        payload = {
+            "target": {
+                "ip": target.ip,
+                "mac": target.mac,
+                "vendor": target.vendor,
+                "hostname": target.hostname,
+                "ipv6_addresses": target.ipv6_addresses,
+                "device_kind": target.device_kind,
+                "device_type": target.device_type,
+                "is_gateway": target.is_gateway,
+                "is_self": target.is_self,
+            },
+            "net": {
+                "interface": net.interface,
+                "local_ip": net.local_ip,
+                "local_mac": net.local_mac,
+                "gateway_ip": net.gateway_ip,
+                "gateway_mac": net.gateway_mac,
+                "subnet": net.subnet,
+            },
+            "gateway_mac": gateway_mac,
+            "verbose": verbose,
+            "action": action,
+            "with_cut": with_cut,
+            "enable_sniff": with_sniff,
+        }
+        vlog(1, f"Delegasi [{action}] ke privileged worker ({worker})")
+        try:
+            run_privileged_worker(worker, payload)
+        except RuntimeError as exc:
+            console.print(f"[red]{exc}[/red]")
         return
 
     handler()
@@ -765,6 +797,4 @@ def run_dashboard(verbose: int = 0, default_mode: str | None = None) -> None:
 
 
 def _header_placeholder() -> Panel:
-    text = Text("NETCUT ", style="bold red")
-    text.append("CLI Dashboard", style="bold white")
-    return Panel(Align.center(text), border_style="blue")
+    return Panel(Align.center(_banner_text()), border_style="blue")
